@@ -14,6 +14,7 @@ const loadProcessFiles = require('./load-process-files');
 const CacheManager = require('./CacheManager');
 const FileOutput = require('../generator/FileOutput');
 const processor = require('../processor');
+const npm = require('../processor/helper/npm');
 
 class BuildManager extends EventEmitter {
     constructor(buildConf) {
@@ -28,6 +29,9 @@ class BuildManager extends EventEmitter {
             componentConf: component,
             componentExtname: component.extname
         });
+        this.resolveExtnames = [
+            '.js', '.' + component.extname, '.ts'
+        ];
 
         let env = process.env.NODE_ENV;
         this.buildEnv = env;
@@ -55,6 +59,20 @@ class BuildManager extends EventEmitter {
                 extnames: componentConf.extname
             }]);
         }
+
+        if (this.appType === 'swan') {
+            // register native swan processor
+            let nativeOpts = buildConf.native;
+            if (nativeOpts !== false) {
+                require('./init-native-swan-processor')(nativeOpts);
+            }
+
+            // register wx2swan processors
+            let wx2swanOpts = buildConf.wx2swan;
+            if (wx2swanOpts) {
+                require('./init-wx2swan-processor')(wx2swanOpts);
+            }
+        }
     }
 
     /**
@@ -75,12 +93,12 @@ class BuildManager extends EventEmitter {
         let {rules: baseRules, processors: baseProcessors} = buildConf;
         let {rules, processors} = extraConf || {};
 
+        rules && (rules = [].concat(baseRules, rules));
+        this.rules = rules || baseRules || [];
+
         processors && (processors = merge({}, baseProcessors, processors));
         buildConf.processors = processors || baseProcessors;
         this.initProcessor(buildConf);
-
-        rules && (rules = [].concat(baseRules, rules));
-        this.rules = rules || baseRules || [];
     }
 
     /**
@@ -97,6 +115,18 @@ class BuildManager extends EventEmitter {
         this.root = root;
         this.sourceDir = sourceDir;
         this.babelConfig = babelUtil.readBabelConfig(root);
+
+        let {output} = this.buildConf;
+        this.compileContext = {
+            cache: this.cache,
+            resolve: npm.resolve.bind(null, this),
+            addFile: this.files.addFile.bind(this.files),
+            getFileByFullPath: this.getFileByFullPath.bind(this),
+            appType: this.appType,
+            logger: this.logger,
+            root,
+            output
+        };
     }
 
     /**
@@ -121,25 +151,25 @@ class BuildManager extends EventEmitter {
      */
     resolve(requireModId, file) {
         let depFile;
-        const logger = this.logger;
-
+        let logger = this.logger;
+        let filePath = typeof file === 'string' ? file : file.fullPath;
         try {
-            let filePath = typeof file === 'string' ? file : file.fullPath;
             depFile = resolve.sync(
                 requireModId,
                 {
+                    extensions: this.resolveExtnames,
                     basedir: pathUtil.dirname(filePath)
                 }
             );
 
             if (depFile === requireModId) {
-                logger.warn('resolve native module', depFile, 'in', file.path);
+                logger.warn('resolve native module', depFile, 'in', filePath);
                 return;
             }
-            logger.debug('resolve module', requireModId, file.path, depFile);
+            logger.debug('resolve module', requireModId, filePath, depFile);
         }
         catch (ex) {
-            logger.error('resolve dep module:', requireModId, 'in', file.path, 'fail');
+            logger.error('resolve dep module:', requireModId, 'in', filePath, 'fail');
         }
 
         return depFile;
@@ -274,14 +304,22 @@ class BuildManager extends EventEmitter {
     }
 
     updateFileCompileResult(file, compileResult) {
-        if (compileResult) {
-            let {content, deps, sourceMap, ast} = compileResult;
-            file.compiled = true;
-            file.content = content;
-            ast && (file.ast = ast);
-            deps && file.addDeps(deps);
-            sourceMap && (file.sourceMap = sourceMap);
+        if (!compileResult) {
+            return;
         }
+
+        let {content, deps, sourceMap, ast} = compileResult;
+        file.compiled = true;
+        file.content = content;
+        ast && (file.ast = ast);
+
+        deps && deps.forEach(item => {
+            let depFile = this.files.getByPath(item);
+            depFile || (depFile = this.files.addFile({path: item}));
+            file.addDeps(depFile.path);
+        });
+
+        sourceMap && (file.sourceMap = sourceMap);
     }
 
     removeAsyncTask(promise) {

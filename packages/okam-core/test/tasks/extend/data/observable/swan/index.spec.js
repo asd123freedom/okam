@@ -8,91 +8,28 @@
 /* eslint-disable babel/new-cap */
 
 import assert from 'assert';
-import expect, {createSpy, spyOn} from 'expect';
+import expect, {createSpy} from 'expect';
 import MyApp from 'core/App';
 import MyPage from 'core/Page';
-import MyComponent from 'core/Component';
-import * as na from 'core/na/index';
-import base from 'core/base/base';
-import component from 'core/base/component';
 import {clearBaseCache} from 'core/helper/factory';
-import {
-    initSwanObservableArray,
-    resetObservableArray,
-    swanObservablePlugin as observable
-} from '../helper';
+import observable from 'core/extend/data/observable/swan';
+import {fakeComponent, fakeAppEnvAPIs} from 'test/helper';
 
 describe('swan observable', function () {
-    const rawEnv = na.env;
-    const rawGetCurrApp = na.getCurrApp;
-
-    const componentFakeMethods = [
-        'selectComponent',
-        'pushData', 'popData',
-        'unshiftData', 'shiftData',
-        'spliceData'
-    ];
-    const rawComponentMethods = [];
-    componentFakeMethods.forEach(
-        m => rawComponentMethods.push(component[m])
-    );
+    let MyComponent;
+    let restoreAppEnv;
 
     beforeEach('init global App', function () {
         clearBaseCache();
-        initSwanObservableArray();
 
-        global.swan = {
-            getSystemInfo() {},
-            request() {},
-            createSelectorQuery() {
-                return {
-                    select(path) {
-                        return path;
-                    }
-                };
-            }
-        };
-
-        componentFakeMethods.forEach(
-            m => {
-                component[m] = (...args) => {
-                    let callback = args[args.length - 1];
-                    if (typeof callback === 'function') {
-                        callback();
-                    }
-                };
-            }
-        );
-        component.selectComponent = function (path) {
-            return 'c' + path;
-        };
-
-        na.getCurrApp = function () {
-            return {};
-        };
-        na.env = base.$api = global.swan;
-
-        global.Component = function (instance) {
-            Object.assign(instance, instance.methods);
-            return instance;
-        };
-
-        global.Page = function (instance) {
-            return instance;
-        };
+        MyComponent = fakeComponent();
+        restoreAppEnv = fakeAppEnvAPIs('swan');
     });
 
     afterEach('clear global App', function () {
-        global.Component = undefined;
-        global.Page = undefined;
-        global.swan = undefined;
-        na.getCurrApp = rawGetCurrApp;
-        na.env = base.$api = rawEnv;
+        MyComponent = undefined;
+        restoreAppEnv();
         expect.restoreSpies();
-        componentFakeMethods.forEach(
-            (m, idx) => (component[m] = rawComponentMethods[idx])
-        );
-        resetObservableArray();
     });
 
     it('should support Vue data access way', () => {
@@ -119,7 +56,6 @@ describe('swan observable', function () {
 
     it('should make data observable', function (done) {
         MyApp.use(observable);
-        let spyUnshiftData = spyOn(component, 'unshiftData');
         let instance = MyComponent({
             data: {
                 a: 3,
@@ -152,10 +88,7 @@ describe('swan observable', function () {
             a: 66,
             b: 'ee',
             c: false,
-            // native api should implement the data update
-            // because here is empty fake, so the value of b is [23]
-            // not [55, 23]
-            d: {a: 3, b: [23]},
+            d: {a: 3, b: [55, 23]},
             e: [23, {b: 33}]
         });
         assert(instance.a === 66);
@@ -166,13 +99,6 @@ describe('swan observable', function () {
 
         expect(spySetData).toNotHaveBeenCalled();
         setTimeout(() => {
-            expect(spyUnshiftData).toHaveBeenCalled();
-            assert(spyUnshiftData.calls.length === 1);
-            expect(spyUnshiftData.calls[0].context).toBe(instance);
-            expect(spyUnshiftData.calls[0].arguments.slice(0, 2)).toEqual(
-                ['d.b', [55]]
-            );
-
             expect(spySetData).toHaveBeenCalled();
             assert(spySetData.calls.length === 1);
             expect(spySetData.calls[0].context).toBe(instance);
@@ -180,6 +106,7 @@ describe('swan observable', function () {
                 'a': 66,
                 'b': 'ee',
                 'c': false,
+                'd.b': [55, 23],
                 'e[1].b': 33
             });
             done();
@@ -189,7 +116,6 @@ describe('swan observable', function () {
     it('should call updated hook when update data done', function (done) {
         let spyUpdated = createSpy(() => {});
         MyApp.use(observable);
-        let spyUnshiftData = spyOn(component, 'unshiftData').andCallThrough();
         let instance = MyComponent({
             data: {
                 a: 3,
@@ -206,12 +132,9 @@ describe('swan observable', function () {
         instance.a = 66;
         instance.e.unshift(66);
 
-        expect(spyUnshiftData).toHaveBeenCalled();
         expect(spyUpdated).toNotHaveBeenCalled();
 
         setTimeout(() => {
-            expect(spyUnshiftData).toHaveBeenCalled();
-            assert(spyUnshiftData.calls.length === 1);
             expect(spyUpdated).toHaveBeenCalled();
             assert(spyUpdated.calls.length === 1);
             done();

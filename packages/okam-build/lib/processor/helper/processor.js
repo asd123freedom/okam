@@ -16,6 +16,14 @@ const BUILTIN_PROCESSORS = require('../type').BUILTIN_PROCESSORS;
 const initBabelProcessorOptions = require('./init-babel');
 const initViewProcessorOptions = require('./init-view');
 
+/**
+ * The default babel processor to use
+ *
+ * @const
+ * @type {string}
+ */
+const DEFAULT_BABEL_PROCESSOR = 'babel';
+
 function hasBabelProcessor(processorName) {
     return (processorName === 'babel'
         || processorName === 'babel7'
@@ -91,6 +99,7 @@ function resolveProcessor(name, root, logger) {
         catch (ex) {
             // ignore
         }
+        return !!result;
     });
 
     if (!result) {
@@ -158,6 +167,12 @@ function getBuiltinProcessor(file, processorInfo, buildManager) {
         handler = customRequire(handler);
     }
 
+    // call before hook
+    let hook = result.hook;
+    if (hook && typeof hook.before === 'function') {
+        hook.before(file, processorOpts);
+    }
+
     return {
         name: processorName,
         handler,
@@ -189,7 +204,7 @@ function addScriptDefaultBabelProcessor(file, buildManager, processors) {
     if (!hasBabel) {
         processors.unshift(
             getBuiltinProcessor(
-                file, {name: 'babel', options: {}}, buildManager
+                file, {name: DEFAULT_BABEL_PROCESSOR, options: {}}, buildManager
             )
         );
     }
@@ -230,7 +245,7 @@ function findMatchProcessor(file, rules, buildManager) {
                     matchProcessors.push(result);
                 }
                 else {
-                    unknownProcessors.push({ruleIndex: r, procesorIndex: k});
+                    unknownProcessors.push({ruleIndex: r, processorIndex: k});
                 }
             }
         }
@@ -247,5 +262,24 @@ function findMatchProcessor(file, rules, buildManager) {
 
     return matchProcessors;
 }
+
+exports.getBuiltinProcessor = function (name, options) {
+    let result = BUILTIN_PROCESSORS[name];
+    if (!result) {
+        return;
+    }
+
+    let handler = result.processor;
+    if (typeof handler === 'string') {
+        handler = customRequire(handler);
+    }
+
+    return {
+        name,
+        handler,
+        options,
+        rext: result.rext
+    };
+};
 
 exports.findMatchProcessor = findMatchProcessor;

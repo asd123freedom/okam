@@ -38,11 +38,12 @@ function shouldPolyfill(importName, name, path) {
  * @param {Object} state the plugin state
  * @param {Object} t the babel type definition
  */
-exports.importLoalPolyfill = function (name, path, state, t) {
+exports.importLocalPolyfill = function (name, path, state, t) {
     let {id, exports: importName} = state.opts.polyfill;
     if (name === false) {
         name = importName;
     }
+
     if (!shouldPolyfill(importName, name, path)) {
         return;
     }
@@ -56,7 +57,7 @@ exports.importLoalPolyfill = function (name, path, state, t) {
 
     let bodyPath = rootPath.get('body.0');
 
-    // ensure the inserted import declareation is after the leading comment
+    // ensure the inserted import declaration is after the leading comment
     removeComments(t, bodyPath, 'leadingComments');
 
     bodyPath.insertBefore(

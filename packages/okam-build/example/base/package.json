@@ -13,6 +13,9 @@
     "dev:wx": "cross-env NODE_ENV=dev node scripts/build.js --watch --type wx",
     "dev:wx:debug": "cross-env NODE_ENV=dev node --inspect-brk scripts/build.js --watch --type wx",
     "dev:wx:clean": "cross-env NODE_ENV=dev node scripts/build.js --watch --clean --type wx",
+    "dev:ant": "cross-env NODE_ENV=dev node scripts/build.js --watch --type ant",
+    "dev:ant:debug": "cross-env NODE_ENV=dev node --inspect-brk scripts/build.js --watch --type ant",
+    "dev:ant:clean": "cross-env NODE_ENV=dev node scripts/build.js --watch --clean --type ant",
     "dev:clean": "cross-env NODE_ENV=dev node scripts/build.js --watch --clean",
     "dev:server": "cross-env NODE_ENV=dev node scripts/build.js --watch --server"
   },
@@ -22,17 +25,14 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "css": "^2.2.3",
     "lodash": "^4.17.10",
     "moment": "^2.22.2",
     "redux": "^4.0.0",
-    "redux-thunk": "^2.3.0",
-    "vant-weapp": "^0.3.7"
+    "redux-thunk": "^2.3.0"
   },
   "devDependencies": {
     "connect": "^3.6.6",
     "cross-env": "^5.2.0",
-    "iview-weapp": "^2.0.0",
     "okam-plugin-tinyimg": "^0.1.0",
     "postcss-url": "^8.0.0",
     "promise-polyfill": "^8.1.0"

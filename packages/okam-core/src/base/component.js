@@ -9,87 +9,6 @@ import {env, getCurrApp} from '../na/index';
 import EventListener from '../util/EventListener';
 import base from './base';
 
-/**
- * Normalize event arguments to fix the native swan framework bug
- *
- * @inner
- * @param {Object} args the event args to normalize
- * @return {Object}
- */
-function normalizeEventArgs(args) {
-    let eventData = args[1];
-    if (eventData.currentTarget && eventData.target) {
-        return args;
-    }
-
-    let propData = this.properties;
-    let dataset = {};
-    propData && Object.keys(propData).forEach(k => {
-        if (/^data\w+$/.test(k)) {
-            let dataKey = k.replace(
-                /^data(\w)/,
-                (match, char) => char.toLowerCase()
-            );
-            dataset[dataKey] = propData[k];
-        }
-    });
-
-    let eventObj = {
-        type: args[0],
-        currentTarget: {
-            dataset,
-            id: this.id
-        },
-        target: {
-            dataset,
-            id: this.id
-        },
-        detail: eventData
-    };
-    args[1] = eventObj;
-
-    return args;
-}
-
-/**
- * Initialize the `$refs` value
- *
- * @inner
- */
-function initRefs() {
-    this.$refs = {};
-
-    let refs = this.$rawRefData;
-    if (typeof refs === 'function') {
-        refs = refs();
-    }
-
-    if (!refs) {
-        return;
-    }
-
-    let result = {};
-    let ctx;
-    let select = this.selectComponent;
-    if (typeof select === 'function') {
-        ctx = this;
-    }
-    else {
-        ctx = this.$selector;
-        select = ctx.select;
-    }
-
-    Object.keys(refs).forEach(id => {
-        result[id] = {
-            get() {
-                return select.call(ctx, `.${refs[id]}`);
-            }
-        };
-    });
-
-    Object.defineProperties(this.$refs, result);
-}
-
 export default {
 
     /**
@@ -99,8 +18,8 @@ export default {
      */
     created() {
         // cannot call setData
-        this.$app = getCurrApp();
         Object.assign(this, base);
+        this.$app = getCurrApp();
 
         this.$listener = new EventListener();
 
@@ -126,9 +45,6 @@ export default {
      * @private
      */
     ready() {
-        // init component refs
-        initRefs.call(this);
-
         // call mounted hook
         this.mounted && this.mounted();
     },
@@ -143,7 +59,7 @@ export default {
         this.beforeDestroy && this.beforeDestroy();
 
         this.$listener.off();
-        this.$refs = this.$selector = null;
+        this.$selector = null;
         this.$isDestroyed = true; // add destroyed flag
 
         // call destroyed hook
@@ -155,10 +71,10 @@ export default {
         /**
          * Emit custom component event
          *
-         * @param  {...any} args the event arguments
+         * @param {...any} args the event arguments
          */
         $emit(...args) {
-            args = normalizeEventArgs.call(this, args);
+            this.__beforeEmit && this.__beforeEmit(args);
             this.$listener.emit.apply(this.$listener, args);
 
             let triggerEvent = this.triggerEvent;

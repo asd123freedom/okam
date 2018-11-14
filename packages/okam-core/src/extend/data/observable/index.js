@@ -6,10 +6,26 @@
 'use strict';
 
 import {isPlainObject} from '../../../util/index';
+import EventListener from '../../../util/EventListener';
+import {normalizeExtendProp} from '../../../helper/methods';
 import {default as Observer, proxyObject} from './Observer';
 import ComputedObserver from './ComputedObserver';
-import EventListener from '../../../util/EventListener';
 import nextTick from './nextTick';
+import {getSetDataPaths} from './setData';
+
+/**
+ * The component property data key
+ *
+ * @type {string}
+ */
+let propDataKey = 'data';
+
+/**
+ * Whether skip the `beforeUpdate`/`updated` hook
+ *
+ * @type {boolean}
+ */
+let isSkipUpdateHook = false;
 
 /**
  * Make computed props observable
@@ -19,9 +35,9 @@ import nextTick from './nextTick';
  * @return {Observer} the observer
  */
 function makeComputedObservable(ctx) {
-    let computedInfo = ctx.computed || {};
+    let computedInfo = ctx.$rawComputed || {};
     if (typeof computedInfo === 'function') {
-        ctx.computed = computedInfo = computedInfo();
+        ctx.$rawComputed = computedInfo = computedInfo();
     }
 
     let observer = new ComputedObserver(ctx, computedInfo);
@@ -54,7 +70,12 @@ function makePropsObservable(ctx) {
         return;
     }
 
-    let observer = new Observer(ctx, ctx.data, null, true);
+    let observer = new Observer(
+        ctx,
+        ctx[propDataKey] || /* istanbul ignore next */ {},
+        null,
+        true
+    );
     let propsObj = {};
 
     Object.keys(props).reduce((last, item) => {
@@ -94,45 +115,40 @@ function makeDataObservable(ctx) {
 }
 
 /**
- * Initialize the props to add observer to the prop to listen the prop change.
+ * Set observable context setting
  *
- * @private
- * @param {Object} ctx the component definition context
+ * @param {string} key the prop data key
+ * @param {boolean} ignoreUpdateHook whether skip update hook
  */
-function initProps(ctx) {
-    // cache the raw props information because the mini program will merge data
-    // and props later on.
-    let props = ctx.props;
-    if (!props) {
-        return;
-    }
-
-    // make the new added property accessible which must be added to
-    // methods object and type must be function
-    ctx.methods || /* istanbul ignore next */ (ctx.methods = {});
-    ctx.$rawProps = () => Object.assign({}, props);
-
-    Object.keys(props).forEach(p => {
-        let value = props[p];
-        let rawObserver = value.observer;
-        value.observer = function (newVal, oldVal, changePath) {
-            rawObserver && rawObserver.call(this, newVal, oldVal, changePath);
-            let propObserver = this.__propsObserver;
-            propObserver && propObserver.firePropValueChange(p, newVal, oldVal);
-        };
-    });
+export function setObservableContext(key, ignoreUpdateHook) {
+    propDataKey = key;
+    isSkipUpdateHook = !!ignoreUpdateHook;
 }
 
 export default {
     component: {
 
         /**
-         * The instance initialization before the instance is normalized and created.
+         * Initialize the props to add observer to the prop to listen the prop change.
          *
-         * @private
+         * @param {boolean} isPage whether is page component
          */
-        $init() {
-            initProps(this);
+        $init(isPage) {
+            // normalize extend computed property
+            normalizeExtendProp(this, 'computed', '$rawComputed', isPage);
+
+            // cache the raw props information because the mini program will merge data
+            // and props later on.
+            let props = this.props;
+            if (!props) {
+                return;
+            }
+
+            let rawProps = Object.assign({}, props);
+            this._rawProps = rawProps;
+            normalizeExtendProp(this, '_rawProps', '$rawProps', isPage);
+
+            this.__initProps && this.__initProps();
         },
 
         /**
@@ -149,6 +165,14 @@ export default {
             this.__executeDataUpdate = this.$executeDataUpdate.bind(this);
 
             this.$dataListener = new EventListener();
+            if (this.$rawComputed) {
+                // fix ant reference bug: `this.data.xx` operation is not allowed
+                // when page onload, otherwise it'll affect the init data state
+                // of the page when load next time.
+                // So, here create a shadow copy of data.
+                this.data = Object.assign({}, this.data);
+            }
+
             this.__propsObserver = makePropsObservable(this);
             this.__dataObserver = makeDataObservable(this);
 
@@ -157,7 +181,7 @@ export default {
             // init computed data
             computedObserver.initComputedPropValues();
 
-            this.afterObserverInit && this.afterObserverInit();
+            this.__afterObserverInit && this.__afterObserverInit();
         },
 
         /**
@@ -215,7 +239,7 @@ export default {
                 }
 
                 // call lifecycle updated hook
-                this.updated && this.updated();
+                isSkipUpdateHook || (this.updated && this.updated());
             },
 
             /**
@@ -233,8 +257,8 @@ export default {
                 if (queues) {
                     // TODO optimize value update: merge operations
                     // call lifecycle beforeUpdate hook
-                    this.beforeUpdate && this.beforeUpdate();
-                    this.setData(queues, this.__nextTickCallback);
+                    isSkipUpdateHook || (this.beforeUpdate && this.beforeUpdate());
+                    this.setData(getSetDataPaths(queues), this.__nextTickCallback);
                     this.$upQueues = null;
                 }
             },
@@ -252,10 +276,22 @@ export default {
                     obj = {[obj]: value};
                 }
 
+                // shadow copy the data to set
+                Object.keys(obj).forEach(k => {
+                    let value = obj[k];
+                    if (Array.isArray(value)) {
+                        value = [].concat(value);
+                    }
+                    else if (typeof value === 'object' && value) {
+                        value = Object.assign({}, value);
+                    }
+                    obj[k] = value;
+                });
+
                 let queues = this.$upQueues;
                 let isUpdating = !!queues;
-                queues || (queues = this.$upQueues = {});
-                Object.assign(queues, obj);
+                queues || (queues = this.$upQueues = []);
+                queues.push(obj);
 
                 if (!isUpdating) {
                     this.__dataUpTaskNum++;

@@ -44,7 +44,7 @@ function getCodeTraverseVisitors(t, initConfig, opts) {
             else if (keyName === 'mixins') {
                 // extract the mixins information for page/component
                 let mixins = componentTransformer.getUsedMixinModulePaths(
-                    prop.value, path, t
+                    prop.value, path, t, opts
                 );
                 initConfig.mixins = mixins;
             }
@@ -61,10 +61,10 @@ function getCodeTraverseVisitors(t, initConfig, opts) {
 }
 
 /**
- * Transfomr mini program code
+ * Transform mini program code
  *
  * @inner
- * @param {Objecct} t the babel type definition
+ * @param {Object} t the babel type definition
  * @param {Object} path the node path to transform
  * @param {Object} declarationPath the declaration statement path to process
  * @param {Object} config the config used to cache the config information
@@ -89,7 +89,7 @@ function transformMiniProgram(t, path, declarationPath, config, opts) {
     let rootPath = path.findParent(p => t.isProgram(p));
     let bodyPath = rootPath.get('body.0');
 
-    // ensure the inserted import declareation is after the leading comment
+    // ensure the inserted import declaration is after the leading comment
     removeComments(t, bodyPath, 'leadingComments');
 
     // insert the base name import statement
@@ -116,14 +116,27 @@ function transformMiniProgram(t, path, declarationPath, config, opts) {
         ? path.get('declaration')
         : path;
     // wrap the export module using the base name
-    toReplacePath.replaceWith(
-        t.expressionStatement(
-            t.callExpression(
-                t.identifier(baseClassName),
-                callArgs
-            )
-        )
+    let callExpression = t.callExpression(
+        t.identifier(baseClassName),
+        callArgs
     );
+    if (opts.isBehavior) {
+        toReplacePath.replaceWith(t.expressionStatement(
+            callExpression
+        ));
+    }
+    else {
+        toReplacePath.replaceWith(
+            t.expressionStatement(
+                t.callExpression(
+                    t.identifier(opts.baseName),
+                    [
+                        callExpression
+                    ]
+                )
+            )
+        );
+    }
 
     // stop traverse to avoid the new created export default statement above
     // that be revisited in this plugin `ExportDefaultDeclaration` visitor

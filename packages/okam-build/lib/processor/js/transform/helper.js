@@ -5,7 +5,11 @@
 
 'use strict';
 
-const {getBaseId, getFrameworkExtendId} = require('../../../framework');
+const {
+    getBaseId,
+    getFrameworkExtendId,
+    normalizeInternalBehavior
+} = require('../../../framework');
 
 const LEADING_COMMENT_TYPE = 'leadingComments';
 const TRAILING_COMMENT_TYPE = 'trailingComments';
@@ -61,7 +65,7 @@ function getPlainObjectNodeValue(node, path, t) {
 /**
  * Create require variable declaration statement
  *
- * @param {string} varName the varialble name
+ * @param {string} varName the variable name
  * @param {string} requireId the required id
  * @param {Object} t the babel type definition
  * @return {Object}
@@ -82,7 +86,7 @@ exports.createRequireVarDeclaration = function (varName, requireId, t) {
 /**
  * Create import declaration statement
  *
- * @param {string|Array.<string>} varName the varialble name to export
+ * @param {string|Array.<string>} varName the variable name to export
  * @param {string} requireId the required id
  * @param {Object} t the babel type definition
  * @return {Object}
@@ -109,6 +113,55 @@ exports.createImportDeclaration = function (varName, requireId, t) {
 };
 
 /**
+ * Create AST node by the given value
+ *
+ * @inner
+ * @param {*} value the value to create
+ * @param {Object} t the babel type definition
+ * @return {?Object}
+ */
+function createNode(value, t) {
+    if (Array.isArray(value)) {
+        let elements = [];
+        value.forEach(item => {
+            let node = createNode(item, t);
+            node && elements.push(node);
+        });
+
+        return t.arrayExpression(elements);
+    }
+
+    if (Object.prototype.toString.call(value) === '[object Object]') {
+        let props = [];
+        Object.keys(value).forEach(k => {
+            let node = createNode(value[k], t);
+            if (node) {
+                props.push(t.objectProperty(
+                    t.identifier(`'${k}'`),
+                    node
+                ));
+            }
+        });
+
+        return t.objectExpression(props);
+    }
+
+    if (value == null) {
+        return t.nullLiteral();
+    }
+
+    let valueType = typeof value;
+    switch (valueType) {
+        case 'boolean':
+            return t.booleanLiteral(value);
+        case 'string':
+            return t.stringLiteral(value);
+        case 'number':
+            return t.numericLiteral(value);
+    }
+}
+
+/**
  * Create simple plain object expression
  *
  * @param {Object} simpleObj the plain object
@@ -116,29 +169,14 @@ exports.createImportDeclaration = function (varName, requireId, t) {
  * @return {Object}
  */
 exports.createSimpleObjectExpression = function (simpleObj, t) {
-    let props = [];
-    Object.keys(simpleObj).forEach(k => {
-        let value = simpleObj[k];
-        let valueNode;
-        let valueType = typeof value;
-        if (valueType !== 'object') {
-            valueNode = t.stringLiteral(value);
-        }
-        else {
-            return;
-        }
-
-        props.push(t.objectProperty(
-            t.identifier(k),
-            valueNode
-        ));
-    });
-    return t.objectExpression(props);
+    return createNode(simpleObj, t);
 };
 
 exports.getBaseId = getBaseId;
 
 exports.getFrameworkExtendId = getFrameworkExtendId;
+
+exports.normalizeInternalBehavior = normalizeInternalBehavior;
 
 /**
  * Remove node comments
@@ -148,8 +186,8 @@ exports.getFrameworkExtendId = getFrameworkExtendId;
  * @param {string} type the comment type
  */
 function removeComments(t, path, type) {
-    let commmentPaths = path.get(type);
-    if (!commmentPaths || !commmentPaths.length) {
+    let commentPaths = path.get(type);
+    if (!commentPaths || !commentPaths.length) {
         return;
     }
 
@@ -162,12 +200,12 @@ function removeComments(t, path, type) {
         if (isParentProgram) {
             parentPath.addComments(
                 'leading',
-                commmentPaths.map(item => item.node)
+                commentPaths.map(item => item.node)
             );
         }
     }
 
-    commmentPaths.forEach(item => item.remove());
+    commentPaths.forEach(item => item.remove());
 }
 
 exports.removeComments = removeComments;
@@ -206,3 +244,14 @@ exports.removeNode = function (t, path, commentsRemoveOpts = {}) {
  * @return {Object}
  */
 exports.getPlainObjectNodeValue = getPlainObjectNodeValue;
+
+/**
+ * Check whether the given variable name is defined in its scope
+ *
+ * @param {Object} path the variable used path
+ * @param {string} varName the variable name
+ * @return {boolean}
+ */
+exports.isVariableDefined = function (path, varName) {
+    return path.scope.hasBinding(varName);
+};

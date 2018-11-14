@@ -11,44 +11,31 @@
 import assert from 'assert';
 import expect, {createSpy, spyOn} from 'expect';
 import MyApp from 'core/App';
-import * as na from 'core/na/index';
 import application from 'core/base/application';
 import base from 'core/base/base';
 import {clearBaseCache} from 'core/helper/factory';
-import {testCallOrder} from '../helper';
+import {testCallOrder, fakeAppEnvAPIs} from 'test/helper';
 
 describe('App', () => {
-    const rawEnv = na.env;
+    let restoreAppEnv;
     beforeEach('init global App', function () {
         clearBaseCache();
-        global.swan = {
-            getSystemInfo() {},
-            request() {}
-        };
-        na.env = base.$api = application.$api = global.swan;
-
-        global.App = function (instance) {
-            return instance;
-        };
+        restoreAppEnv = fakeAppEnvAPIs('swan');
     });
 
     afterEach('clear global App', function () {
-        global.App = undefined;
-        global.swan = undefined;
-        na.env = base.$api = application.$api = rawEnv;
+        restoreAppEnv();
         expect.restoreSpies();
     });
 
     it('should inherit base api', () => {
         let appInstance = {};
-        let spyApp = spyOn(global, 'App').andCallThrough();
         let app = MyApp(appInstance);
+        app.onLaunch();
 
         Object.keys(base).forEach(k => {
             assert(app[k] === base[k]);
         });
-
-        expect(spyApp).toHaveBeenCalledWith(appInstance);
     });
 
     it('should call base onLaunch/onShow in order', () => {
@@ -81,23 +68,12 @@ describe('App', () => {
     });
 
     it('should support $promisifyApis options', () => {
-        let callSetApiCounter = 0;
         let testApiSuccessData = {a: 3};
         let testApiRawFunc = createSpy(opts => {
             opts.success(testApiSuccessData);
         }).andCallThrough();
-        let testApiFunc = testApiRawFunc;
-        Object.defineProperties(application.$api, {
-            testApi: {
-                get() {
-                    return testApiFunc;
-                },
-                set(val) {
-                    testApiFunc = val;
-                    callSetApiCounter++;
-                }
-            }
-        });
+        base.$api.testApi = testApiRawFunc;
+        let rawGetSystemInfo = base.$api.getSystemInfo;
 
         let app = MyApp({
             $promisifyApis: ['getSystemInfo', 'testApi'],
@@ -117,7 +93,9 @@ describe('App', () => {
         assert(typeof getSystemInfo === 'function');
         assert(getSystemInfo() instanceof Promise);
 
-        assert(callSetApiCounter === 1);
+        assert(app.$api !== global.swan);
+        assert(app.$api.getSystemInfo !== rawGetSystemInfo);
+        assert(app.$api.testApi !== testApiRawFunc);
         assert(typeof testApi === 'function');
 
         let testSuccessCallback = createSpy(() => {});
@@ -142,8 +120,7 @@ describe('App', () => {
     });
 
     it('should support $interceptApis options', function (done) {
-        let callSetApiCounter = 0;
-        application.$http.request = application.$api.request = function (opts) {
+        base.$http.request = function (opts) {
             let {data} = opts;
             if (data > 1) {
                 return Promise.resolve(data);
@@ -151,18 +128,9 @@ describe('App', () => {
             return Promise.reject(data);
         };
         let testApiRawFunc = createSpy(() => {});
-        let testApiFunc = testApiRawFunc;
-        Object.defineProperties(application.$api, {
-            testApi: {
-                get() {
-                    return testApiFunc;
-                },
-                set(val) {
-                    testApiFunc = val;
-                    callSetApiCounter++;
-                }
-            }
-        });
+        let apis = base.$api;
+        apis.testApi = testApiRawFunc;
+        apis.request = base.$http.request;
 
         let doneRequestSpy = createSpy((err, res) => {
             return {isFail: !!err, data: res};
@@ -232,7 +200,7 @@ describe('App', () => {
         }, 0);
 
         let testApi = app.$api.testApi;
-        assert(callSetApiCounter === 1);
+        assert(testApi !== testApiRawFunc);
         testApi(23);
         expect(testApiRawFunc).toHaveBeenCalledWith('abc');
     });

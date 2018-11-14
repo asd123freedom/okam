@@ -1,25 +1,31 @@
 /**
- * @file Component helper
+ * @file Component normalizer helper
  * @author sparklewhy@gmail.com
  */
 
 'use strict';
 
-import {normalizeProps} from './props';
+import {normalizeMethods} from './methods';
 
 /**
- * The lifecycle methods and properties added in okam
+ * Normalize component props data using mini program syntax
  *
- * @type {Array.<string>}
+ * @param {Object} props the props data to normalize
+ * @return {?Object}
  */
-const extendPropMethods = [
-    'beforeCreate', 'beforeMount', 'mounted',
-    'beforeDestroy', 'destroyed', 'beforeUpdate',
-    'updated', 'computed', '$rawRefData'
-];
+function normalizeProps(props) {
+    Object.keys(props).forEach(k => {
+        let propValue = props[k];
+        if (propValue && propValue.default !==  undefined) {
+            propValue.value = propValue.default;
+            delete propValue.default;
+        }
+    });
+    return props;
+}
 
 /**
- * Normalize the component attribute names
+ * Normalize the component or behavior attribute names to native
  *
  * @param {Object} componentInfo the component to normalize
  * @return {Object}
@@ -28,12 +34,15 @@ export function normalizeAttributeNames(componentInfo) {
     let {props, properties, mixins, behaviors} = componentInfo;
 
     if (!properties && props) {
+        delete componentInfo.props;
         componentInfo.properties = normalizeProps(props);
     }
 
     if (!behaviors && mixins) {
+        delete componentInfo.mixins;
         componentInfo.behaviors = mixins;
     }
+
     return componentInfo;
 }
 
@@ -45,24 +54,7 @@ export function normalizeAttributeNames(componentInfo) {
  */
 export function normalizeComponent(componentInfo) {
     normalizeAttributeNames(componentInfo);
+    normalizeMethods(componentInfo);
 
-    let methods = {};
-    // move new added methods and properties to methods object
-    extendPropMethods.forEach(k => {
-        let value = componentInfo[k];
-        if (typeof value === 'function') {
-            methods[k] = value;
-        }
-        else if (value) {
-            // convert non-method prop to method
-            methods[k] = () => value;
-        }
-    });
-
-    if (Object.keys(methods).length) {
-        componentInfo.methods = Object.assign(
-            {}, methods, componentInfo.methods
-        );
-    }
     return componentInfo;
 }

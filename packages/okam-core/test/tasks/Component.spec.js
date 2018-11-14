@@ -11,58 +11,30 @@
 import assert from 'assert';
 import expect, {createSpy, spyOn} from 'expect';
 import MyApp from 'core/App';
-import MyComponent from 'core/Component';
-import * as na from 'core/na/index';
 import base from 'core/base/base';
 import component from 'core/base/component';
 import {clearBaseCache} from 'core/helper/factory';
 import EventListener from 'core/util/EventListener';
-import {testCallOrder} from '../helper';
+import {testCallOrder, fakeComponent, fakeAppEnvAPIs} from 'test/helper';
 
 describe('Component', () => {
-    const rawEnv = na.env;
-    const rawGetCurrApp = na.getCurrApp;
-    const rawSelectComponent = component.selectComponent;
+    let MyComponent;
+    let restoreAppEnv;
+
     beforeEach('init global App', function () {
         clearBaseCache();
-        global.swan = {
-            getSystemInfo() {},
-            request() {},
-            createSelectorQuery() {
-                return {
-                    select(path) {
-                        return path;
-                    }
-                };
-            }
-        };
 
-        component.selectComponent = function (path) {
-            return 'c' + path;
-        };
-
-        na.getCurrApp = function () {
-            return {};
-        };
-        na.env = base.$api = global.swan;
-
-        global.Component = function (instance) {
-            Object.assign(instance, instance.methods);
-            return instance;
-        };
+        MyComponent = fakeComponent();
+        restoreAppEnv = fakeAppEnvAPIs('swan');
     });
 
     afterEach('clear global App', function () {
-        global.Component = undefined;
-        global.swan = undefined;
-        component.selectComponent = rawSelectComponent;
-        na.getCurrApp = rawGetCurrApp;
-        na.env = base.$api = rawEnv;
+        MyComponent = undefined;
+        restoreAppEnv();
         expect.restoreSpies();
     });
 
     it('should inherit base api', () => {
-        let spyComponent = spyOn(global, 'Component').andCallThrough();
         let componentInstance = {};
         let component = MyComponent(componentInstance);
         component.created();
@@ -70,8 +42,6 @@ describe('Component', () => {
         Object.keys(base).forEach(k => {
             assert(component[k] === base[k]);
         });
-
-        expect(spyComponent).toHaveBeenCalledWith(componentInstance);
     });
 
     it('should call base created/attached/ready/detached in order', () => {
@@ -184,12 +154,11 @@ describe('Component', () => {
             .andCall(() => callDestroyOrder.push(1));
         let spyDestroyed = spyOn(componentInstance, 'destroyed')
             .andCall(() => callDestroyOrder.push(2));
-        let instance = MyComponent(componentInstance, {a: 'xx-1'});
+        let instance = MyComponent(componentInstance);
         instance.created();
         instance.attached();
         instance.ready();
 
-        assert(instance.$refs != null);
         assert(instance.$selector != null);
 
         instance.$listener.on('xx', () => {});
@@ -203,7 +172,6 @@ describe('Component', () => {
         expect(spyBaseDetached).toHaveBeenCalled();
         expect(spyDetached).toHaveBeenCalled();
 
-        assert(instance.$refs == null);
         assert(instance.$selector == null);
         expect(instance.$listener._listeners).toEqual({});
         assert(instance.$isDestroyed);
@@ -421,30 +389,6 @@ describe('Component', () => {
         expect(spyTest2.calls[0].context).toBe(instance);
     });
 
-    it('should support refs', () => {
-        let instance = MyComponent({
-            beforeCreate() {
-                assert(this.$refs == null);
-            },
-            created() {
-                assert(this.$refs == null);
-            },
-            beforeMount() {
-                assert(this.$refs == null);
-            },
-            mounted() {
-                assert(this.$refs != null);
-
-                assert(this.$refs.a === 'c.xx-a');
-                assert(this.$refs.b === 'c.xx-b');
-
-            }
-        }, {a: 'xx-a', b: 'xx-b'});
-        instance.created();
-        instance.attached();
-        instance.ready();
-    });
-
     it('should call $init before normalize', () => {
         let componentInstance = {
             $init() {
@@ -462,7 +406,7 @@ describe('Component', () => {
         let spyInit = spyOn(componentInstance, '$init').andCallThrough();
         let component = MyComponent(componentInstance);
 
-        expect(spyInit).toHaveBeenCalledWith(false);
+        expect(spyInit).toHaveBeenCalledWith(false, undefined);
         expect(spyInit.calls[0].context).toBe(componentInstance);
         assert(typeof component.hi === 'function');
     });
@@ -607,38 +551,54 @@ describe('Component', () => {
 
     it('should normalize methods', () => {
         const extendPropMethods = [
-            'beforeCreate', 'beforeMount', 'mounted',
-            'beforeDestroy', 'destroyed', 'updated',
-            'computed', '$rawRefData'
+            'beforeCreate',
+            'beforeMount', 'mounted',
+            'beforeDestroy', 'destroyed',
+            'beforeUpdate', 'updated'
         ];
+        const notExistedProps = [
+            '$rawComputed',
+            '$rawWatch',
+            '$rawProps'
+        ];
+
         const computedValue = {};
-        const refData = {};
         let instance = MyComponent({
             beforeCreate() {},
             beforeMount() {},
             mounted() {},
             beforeDestroy() {},
             destroyed() {},
+            beforeUpdate() {},
             updated() {},
+            props: {
+                a: {
+                    type: Number
+                }
+            },
+            data: {
+                c: 'xx'
+            },
             computed: computedValue,
-            $rawRefData: refData,
+            watch: {
+                c() {
+                    // do sth.
+                }
+            },
             methods: {
                 hi() {}
             }
         });
-        const extendProps = {
-            computed: computedValue,
-            $rawRefData: refData
-        };
+
+        notExistedProps.forEach(k => {
+            let value = instance.methods[k];
+            assert(value === undefined);
+        });
+
         extendPropMethods.forEach(k => {
             let value = instance.methods[k];
             assert(typeof value === 'function');
-            if (extendProps[k]) {
-                assert(value() === extendProps[k]);
-            }
-            else {
-                assert(value === instance[k]);
-            }
+            assert(value === instance[k]);
         });
 
         assert(typeof instance.hi === 'function');

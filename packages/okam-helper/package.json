@@ -1,6 +1,6 @@
 {
   "name": "okam-helper",
-  "version": "0.2.1-alpha.0",
+  "version": "0.3.0",
   "description": "The build helper for Okam develop framework",
   "main": "index.js",
   "keywords": [
@@ -13,7 +13,7 @@
   ],
   "scripts": {
     "lint": "fecs ./lib index.js --reporter=baidu --rule",
-    "test": "mocha --require intelli-espower-loader test/tasks/**/*.spec.js",
+    "test": "mocha --require @babel/register  test/tasks/**/*.spec.js",
     "prepublish": "npm run lint && npm test"
   },
   "license": "MIT",

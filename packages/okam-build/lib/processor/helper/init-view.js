@@ -7,7 +7,7 @@
 
 /* eslint-disable fecs-min-vars-per-destructure */
 const path = require('path');
-const PLUGIN_BASE_NAME = path.join(__dirname, '..', '..', 'template/transform');
+const PLUGIN_BASE_NAME = path.join(__dirname, '..', 'template/plugins');
 
 /**
  * The builtin plugins
@@ -16,7 +16,16 @@ const PLUGIN_BASE_NAME = path.join(__dirname, '..', '..', 'template/transform');
  * @type {Object}
  */
 const BUILTIN_PLUGINS = {
-    syntax: path.join(PLUGIN_BASE_NAME, 'syntax-plugin'),
+    syntax: {
+        wx: path.join(PLUGIN_BASE_NAME, 'wx-syntax-plugin'),
+        swan: path.join(PLUGIN_BASE_NAME, 'swan-syntax-plugin'),
+        ant: path.join(PLUGIN_BASE_NAME, 'ant-syntax-plugin')
+    },
+    eventSyntax: {
+        wx: path.join(PLUGIN_BASE_NAME, 'event', 'wx-event-plugin'),
+        swan: path.join(PLUGIN_BASE_NAME, 'event', 'swan-event-plugin'),
+        ant: path.join(PLUGIN_BASE_NAME, 'event', 'ant-event-plugin')
+    },
     html: path.join(PLUGIN_BASE_NAME, 'html-plugin'),
     ref: path.join(PLUGIN_BASE_NAME, 'ref-plugin')
 };
@@ -50,21 +59,26 @@ function addRefPlugin(plugins) {
  */
 function normalizeViewPlugins(plugins, appType) {
     return plugins.map(item => {
-        if (typeof item === 'string') {
+        let pluginItem = item;
+        let pluginOptions;
+        if (Array.isArray(item)) {
+            pluginItem = item[0];
+            pluginOptions = item[1];
+        }
+        else if (typeof item === 'string') {
             let pluginPath = BUILTIN_PLUGINS[item];
-            pluginPath && (item = pluginPath);
+            if (pluginPath && typeof pluginPath === 'object') {
+                pluginPath = pluginPath[appType];
+            }
+
+            pluginPath && (pluginItem = pluginPath);
         }
 
-        let pluginItem;
-        if (typeof item === 'string') {
-            pluginItem = require(item);
+        if (typeof pluginItem === 'string') {
+            pluginItem = require(pluginItem);
         }
 
-        if (typeof pluginItem === 'function') {
-            pluginItem = pluginItem(appType);
-        }
-
-        return pluginItem;
+        return pluginOptions ? [pluginItem, pluginOptions] : pluginItem;
     });
 }
 
@@ -72,7 +86,7 @@ function normalizeViewPlugins(plugins, appType) {
  * Initialize component view template transform options.
  *
  * @param {Object} processOpts the process options
- * @param {Array.<string|Object|Function>} processOpts.plugins the view processor plugins,
+ * @param {Array.<string|Object>} processOpts.plugins the view processor plugins,
  *        the builtin plugins:
  *        `syntax`: transform okam template syntax to mini program template syntax
  *        `html`: transform html tags to mini program component tag
@@ -80,10 +94,6 @@ function normalizeViewPlugins(plugins, appType) {
  *        You can also pass your custom plugin:
  *        {
  *           tag() {} // refer to the ref plugin implementation
- *        }
- *        or
- *        function (appType) { // refer to the syntax plugin implementation
- *            return {tag() {}};
  *        }
  * @param {BuildManager} buildManager the build manager
  * @return {Object}
@@ -120,3 +130,13 @@ function initViewTransformOptions(processOpts, buildManager) {
 }
 
 module.exports = exports = initViewTransformOptions;
+
+/**
+ * Get event syntax transformation plugin
+ *
+ * @param {string} appType the app type to transform
+ * @return {Object}
+ */
+exports.getEventSyntaxPlugin = function (appType) {
+    return BUILTIN_PLUGINS.eventSyntax[appType];
+};

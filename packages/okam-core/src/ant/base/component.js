@@ -1,5 +1,5 @@
 /**
- * @file extend the component base
+ * @file Ant Component base
  * @author sparklewhy@gmail.com
  */
 
@@ -7,7 +7,7 @@
 
 import componentBase from '../../base/component';
 
-export default Object.assign(componentBase, {
+const antComponent = Object.assign({}, componentBase, {
     didMount() {
         this.created();
         this.attached();
@@ -23,3 +23,23 @@ export default Object.assign(componentBase, {
         this.detached();
     }
 });
+
+antComponent.methods = Object.assign({}, antComponent.methods, {
+
+    /**
+     * Emit custom component event
+     *
+     * @param {...any} args the event arguments
+     */
+    $emit(...args) {
+        this.__beforeEmit && this.__beforeEmit(args);
+        this.$listener.emit.apply(this.$listener, args);
+
+        let eventProp = args[0];
+        eventProp = 'on' + eventProp.charAt(0).toUpperCase() + eventProp.substr(1);
+        let eventHandler = this.props[eventProp];
+        eventHandler.call(this, args[1]);
+    }
+});
+
+export default antComponent;

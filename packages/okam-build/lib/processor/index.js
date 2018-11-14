@@ -10,10 +10,11 @@
 
 const path = require('path');
 const {createFile} = require('./FileFactory');
-const {findMatchProcessor} = require('./helper/processor');
+const {findMatchProcessor, getBuiltinProcessor} = require('./helper/processor');
+const {getEventSyntaxPlugin} = require('./helper/init-view');
 const registerProcessor = require('./type').registerProcessor;
-const {isPromise, md5} = require('../util').helper;
-const {analysisNpmComponents} = require('./npm/component');
+const {isPromise} = require('../util').helper;
+const {toHyphen} = require('../util').string;
 
 function processConfigInfo(file, root, owner) {
     let config = file.config;
@@ -69,8 +70,50 @@ function processEntryScript(file, allFiles, root, componentExtname) {
     allFiles.push(jsonFile);
 }
 
-function processComponentScript(file, root) {
-    processConfigInfo(file, root, file.owner);
+function processComponentScript(buildManager, file, root) {
+    let jsonFile = processConfigInfo(file, root, file.owner);
+    if (jsonFile) {
+        jsonFile.component = file;
+        jsonFile.isComponentConfig = true;
+    }
+    compile(jsonFile, buildManager);
+}
+
+/**
+ * Process file using the given processor
+ *
+ * @inner
+ * @param {Object} file the file to process
+ * @param {Object} processor the processor to use
+ * @param {BuildManager} buildManager the build manager
+ */
+function processFile(file, processor, buildManager) {
+    let {compileContext, logger} = buildManager;
+    let {handler, options: opts, rext} = processor;
+    logger.debug(`compile file ${file.path}, using ${processor.name}: `, opts);
+
+    let result = handler(file, Object.assign({
+        config: opts
+    }, compileContext));
+    if (!result) {
+        return;
+    }
+
+    rext && (file.rext = rext);
+
+    if (isPromise(result)) {
+        buildManager.addAsyncTask(file, result);
+        return;
+    }
+
+    if (result.isComponent) {
+        file.release = false;
+        file.isComponent = true;
+        compileComponent(result, file, buildManager);
+    }
+    else {
+        buildManager.updateFileCompileResult(file, result);
+    }
 }
 
 /**
@@ -80,53 +123,35 @@ function processComponentScript(file, root) {
  * @param {BuildManager} buildManager the build manager
  */
 function compile(file, buildManager) {
-    let {cache, logger, root, rules, appType, files: allFiles} = buildManager;
-    let {output: outputOpts} = buildManager.buildConf;
+    let {logger, root, rules, files: allFiles} = buildManager;
     let processors = findMatchProcessor(file, rules, buildManager);
     logger.debug('compile file:', file.path, processors.length);
 
     for (let i = 0, len = processors.length; i < len; i++) {
-        let item = processors[i];
-        let {handler, options: opts, rext} = item;
-        logger.debug(`compile file ${file.path}, using ${item.name}: `, opts);
-
-        let result = handler(file, {
-            cache,
-            config: opts,
-            appType,
-            logger,
-            root,
-            output: outputOpts
-        });
-        if (!result) {
-            continue;
-        }
-
-        rext && (file.rext = rext);
-
-        if (isPromise(result)) {
-            buildManager.addAsyncTask(file, result);
-            continue;
-        }
-
-        if (result.isComponent) {
-            file.release = false;
-            file.isComponent = true;
-            compileComponent(result, file, buildManager);
-        }
-        else {
-            buildManager.updateFileCompileResult(file, result);
-        }
+        processFile(file, processors[i], buildManager);
     }
 
     if (file.isEntryScript) {
         processEntryScript(file, allFiles, root, buildManager.componentExtname);
     }
     else if (file.isPageScript || file.isComponentScript) {
-        processComponentScript(file, root);
+        processComponentScript(buildManager, file, root);
+    }
+}
+
+/**
+ * Get custom component tags
+ *
+ * @param {Object} config the component config
+ * @return {?Array.<string>}
+ */
+function getCustomComponentTags(config) {
+    let {usingComponents} = config || {};
+    if (!usingComponents) {
+        return;
     }
 
-    file.md5 = md5(file.content);
+    return Object.keys(usingComponents).map(k => toHyphen(k));
 }
 
 function compileComponent(component, file, buildManager) {
@@ -149,13 +174,17 @@ function compileComponent(component, file, buildManager) {
         scriptFile.tplRefs = tplFile.refs;
         compile(scriptFile, buildManager);
 
-        if (scriptFile.config && scriptFile.config.usingComponents) {
-            analysisNpmComponents(
-                scriptFile.config.usingComponents,
-                scriptFile,
-                buildManager
-            );
-        }
+        // transform template event syntax
+        let tags = getCustomComponentTags(scriptFile.config);
+        let tplProcessor = getBuiltinProcessor('view', {
+            plugins: [
+                [
+                    getEventSyntaxPlugin(buildManager.appType),
+                    {customComponentTags: tags}
+                ]
+            ]
+        });
+        processFile(tplFile, tplProcessor, buildManager);
     }
 
     let styleFiles = component.styles || [];

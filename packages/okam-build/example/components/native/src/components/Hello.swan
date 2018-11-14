@@ -1,0 +1,9 @@
+<view class="hello-wrap">
+    <view>
+        <text class="hello-title">
+            {{title}}
+        </text>
+        <button bindtap="handleTap">Click me</butotn>
+    </view>
+    <simple>SimpleSlot</simple>
+</view>

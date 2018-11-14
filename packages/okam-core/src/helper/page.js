@@ -22,5 +22,6 @@ export function normalizePage(pageInfo) {
             pageInfo[k] = methods[k];
         });
     }
+
     return pageInfo;
 }

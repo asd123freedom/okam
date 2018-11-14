@@ -15,7 +15,8 @@ import {
     mixin,
     isFunction,
     isObject,
-    isPlainObject
+    isPlainObject,
+    definePropertyValue
 } from 'core/util/index';
 
 describe('App', () => {
@@ -55,6 +56,59 @@ describe('App', () => {
         assert.ok(isPropertyWritable(obj, 'c'));
     });
 
+    it('definePropertyValue', () => {
+        let obj = {a: 3};
+        definePropertyValue(obj, 'b', 6);
+        expect(obj).toEqual({a: 3, b: 6});
+
+        definePropertyValue(obj, 'c', 5);
+        expect(obj).toEqual({a: 3, b: 6, c: 5});
+        Object.defineProperty(obj, 'd', {
+            get() {
+                return 8;
+            }
+        });
+        Object.defineProperty(obj, 'e', {
+            value: 10,
+            enumerable: true
+        });
+        Object.defineProperty(obj, 'f', {});
+        let obj2 = Object.create(obj);
+        definePropertyValue(obj2, 'd', 9);
+        definePropertyValue(obj2, 'e', 12);
+        definePropertyValue(obj2, 'f', 66);
+
+        assert(obj2.a === 3);
+        assert(obj2.b === 6);
+        assert(obj2.c === 5);
+        assert(obj2.d === 9);
+        assert(obj2.e === 12);
+        assert(obj2.f === 66);
+        expect(Object.keys(obj2)).toEqual(['d', 'e', 'f']);
+
+        let fObj = Object.freeze({c: 's'});
+        let fObj2 = Object.create(fObj);
+        definePropertyValue(fObj2, 'c', 12);
+        assert(fObj2.c === 12);
+
+        let obj3 = {};
+        let val = 8;
+        Object.defineProperty(obj3, 'h', {
+            get() {
+                return val;
+            },
+            set(newVal) {
+                val = newVal;
+            }
+        });
+        definePropertyValue(obj3, 'h', 12);
+        assert(obj3.h === 12);
+        definePropertyValue(obj3, 'k', 6);
+        assert(obj3.k === 6);
+        definePropertyValue(obj3, 'k', 23);
+        assert(obj3.k === 23);
+    });
+
     it('isPromise', () => {
         let promise = new Promise(() => {});
         assert.ok(isPromise(promise));
@@ -84,7 +138,7 @@ describe('App', () => {
         });
 
         obj = {a: 3, b: {c: 6, e: {b: 3}}, d: [23], h: null};
-        obj2 = {a: 56, b: {c: 78, d: 23, e: {a: 3}}, d: [56], e: 555, h: 666};
+        obj2 = {a: 56, b: {c: 78, d: 23, e: {a: 3}}, d: [56], e: 555, h: 666, f: {a: 3}};
         let obj3 = {a: 32, e: {a: 3}, k: 56};
         result = mixin(obj, obj2, null, obj3);
         assert(obj === result);
@@ -94,8 +148,10 @@ describe('App', () => {
             d: [23],
             h: null,
             e: 555,
-            k: 56
+            k: 56,
+            f: {a: 3}
         });
+        assert(obj.f !== obj2.f);
 
         obj = {a: () => {}, b: {c: () => {}}, c: () => {}};
         obj2 = {a: () => {}, b: {c: () => {}}};

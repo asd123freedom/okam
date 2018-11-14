@@ -12,49 +12,25 @@ import assert from 'assert';
 import expect, {createSpy, spyOn} from 'expect';
 import MyApp from 'core/App';
 import MyPage from 'core/Page';
-import * as na from 'core/na/index';
-import base from 'core/base/base';
 import page from 'core/base/page';
 import component from 'core/base/component';
 import {clearBaseCache} from 'core/helper/factory';
-import {testCallOrder} from '../helper';
+import {testCallOrder, fakeAppEnvAPIs} from 'test/helper';
 
 describe('Page', () => {
-    const rawEnv = na.env;
-    const rawGetCurrApp = na.getCurrApp;
+    let restoreAppEnv;
+
     beforeEach('init global App', function () {
         clearBaseCache();
-        global.swan = {
-            getSystemInfo() {},
-            request() {},
-            createSelectorQuery() {
-                return {
-                    select(path) {
-                        return path;
-                    }
-                };
-            }
-        };
-        na.getCurrApp = function () {
-            return {};
-        };
-        na.env = base.$api = global.swan;
-
-        global.Page = function (instance) {
-            return instance;
-        };
+        restoreAppEnv = fakeAppEnvAPIs('swan');
     });
 
     afterEach('clear global App', function () {
-        global.Page = undefined;
-        global.swan = undefined;
-        na.getCurrApp = rawGetCurrApp;
-        na.env = base.$api = rawEnv;
+        restoreAppEnv();
         expect.restoreSpies();
     });
 
     it('should inherit component api', () => {
-        let spyPage = spyOn(global, 'Page').andCallThrough();
         let pageInstance = {};
         let page = MyPage(pageInstance);
         Object.keys(component).forEach(k => {
@@ -65,8 +41,6 @@ describe('Page', () => {
         Object.keys(component.methods).forEach(k => {
             assert(page[k] === component.methods[k]);
         });
-
-        expect(spyPage).toHaveBeenCalledWith(pageInstance);
     });
 
     it('should call base onLoad/onReady/onUnload in order', () => {
@@ -190,7 +164,7 @@ describe('Page', () => {
         let spyInit = spyOn(pageInstance, '$init').andCallThrough();
         let page = MyPage(pageInstance);
 
-        expect(spyInit).toHaveBeenCalledWith(true);
+        expect(spyInit).toHaveBeenCalledWith(true, undefined);
         expect(spyInit.calls[0].context).toBe(pageInstance);
         assert(typeof page.hi === 'function');
     });
@@ -312,31 +286,5 @@ describe('Page', () => {
             expect(item).toHaveBeenCalled();
             expect(item.calls[0].context).toBe(page);
         });
-    });
-
-    it('should support refs', () => {
-        let refInfo = {a: 'xx-a', b: 'xx-b'};
-        let page = MyPage({
-            beforeCreate() {
-                assert(this.$refs == null);
-            },
-            created() {
-                assert(this.$refs == null);
-            },
-            beforeMount() {
-                assert(this.$refs == null);
-            },
-            mounted() {
-                assert(this.$refs != null);
-
-                assert(this.$refs.a === '.xx-a');
-                assert(this.$refs.b === '.xx-b');
-
-            }
-        }, refInfo);
-        page.onLoad();
-        page.onReady();
-
-        assert(page.$rawRefData === refInfo);
     });
 });

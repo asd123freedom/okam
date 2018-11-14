@@ -6,6 +6,8 @@
 
 'use strict';
 
+import {normalizeExtendProp} from '../../helper/methods';
+
 function toDataGetter(path) {
     let parts = path.split('.');
     return function () {
@@ -83,12 +85,24 @@ function normalizeWatch(watch) {
 
 export default {
     component: {
+
+        /**
+         * The instance initialization before the instance is normalized and created.
+         *
+         * @param {boolean} isPage whether is page component
+         * @private
+         */
+        $init(isPage) {
+            // normalize extended watch property
+            normalizeExtendProp(this, 'watch', '$rawWatch', isPage);
+        },
+
         methods: {
 
             /**
              * Watch the given expression or function
              *
-             * @param {string|Function} expressOrFunc the expression or functon to watch
+             * @param {string|Function} expressOrFunc the expression or function to watch
              * @param {Function|Object} callback the callback to execute when the
              *        expression or function value changes
              * @param {Object=} options watch options
@@ -114,9 +128,13 @@ export default {
              *
              * @private
              */
-            afterObserverInit() {
+            __afterObserverInit() {
+                let watch = this.$rawWatch;
+                if (typeof watch === 'function') {
+                    watch = this.$rawWatch();
+                }
                 this.__computedObserver.addWatchComputed(
-                    normalizeWatch.call(this, this.watch)
+                    normalizeWatch.call(this, watch)
                 );
             }
         }

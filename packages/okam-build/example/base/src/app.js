@@ -15,17 +15,18 @@ export default {
             'pages/tpl/tplSyntax',
             'pages/tpl/tplReuse',
             'pages/tpl/tplPug',
+            'pages/tpl/ref',
             'pages/typescript/ts',
             'pages/component/componentPage',
-            'pages/component/compiViewPage',
             'pages/lifecycle/index',
             'pages/data/computed',
             'pages/data/init',
+            'pages/data/array',
             'pages/data/watch',
             'pages/todos/todoList',
             'pages/todos/counter',
             'pages/behavior/index',
-            'pages/vant/index'
+            'pages/broadcast/index'
         ],
         subPackages: [
             {
@@ -76,6 +77,12 @@ export default {
         }
     },
 
+    broadcastEvents: {
+        broadcastEventC(e) {
+            console.log('receive broadcast event c in app...', e, this);
+        }
+    },
+
     async testReq() {
         let result = null;
         try {
@@ -90,7 +97,7 @@ export default {
 
     async onLaunch() {
         let result = await this.$api.getSystemInfo();
-        console.log(result);
+        console.log('launch system info', result);
         console.log('show onLaunch...');
 
         let reqResult = await this.testReq();
@@ -99,10 +106,22 @@ export default {
 
     onShow() {
         this.$api.getSystemInfo().then(function (res) {
-            console.log(res);
+            console.log('systemInfo', res);
         });
 
         console.log('show app...');
+
+        // for (let i = 0; i < 5; i++) {
+        //     this.$http.get(
+        //         'http://www.baidu.com',
+        //         {
+        //             data: {q: 't' + i},
+        //             success(res) {
+        //                 console.log('success' + i, res)
+        //             }
+        //         }
+        //     );
+        // }
     },
 
     onHide() {

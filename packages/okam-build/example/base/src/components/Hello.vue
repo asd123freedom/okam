@@ -1,7 +1,7 @@
 <template>
     <view class="hello-wrap">
         <text class="title">Hello Title: {{myName}} - {{myNum}}</text>
-        <view :class=' myClass '>Computed Prop:<text>{{myComputedNum}} - {{obj}}</text></view>
+        <view :class=' myClass '>Computed Prop:<text>{{myComputedNum}} - {{obj.toString()}}</text></view>
         <slot name="top"></slot>
         <slot></slot>
         <button class="btn" @click="handleClick">{{source}}-{{num}}</button>
@@ -13,6 +13,9 @@
 <script>
 
 export default {
+
+    // mixins: ['form-fields'],
+
     config: { // The component config defined in component.json
     },
 
@@ -54,6 +57,16 @@ export default {
     computed: {
         myComputedNum() {
             return this.num + '-computed';
+        }
+    },
+
+    pageLifetimes: {
+        show() {
+            console.log('hello component show', this)
+        },
+
+        hide() {
+            console.log('hello component hide', this)
         }
     },
 

@@ -55,6 +55,10 @@ export default {
                         path: 'tpl/tplReuse'
                     },
                     {
+                        subName: 'ref 属性支持',
+                        path: 'tpl/ref'
+                    },
+                    {
                         subName: '其他模板引擎',
                         path: 'tpl/tplPug'
                     }
@@ -70,16 +74,16 @@ export default {
                         path: 'component/componentPage',
                     },
                     {
-                        subName: '微信有赞组件',
-                        path: 'vant/index',
-                    },
-                    {
                         subName: '生命周期',
                         path: 'lifecycle/index',
                     },
                     {
                         subName: 'Behavior支持',
                         path: 'behavior/index',
+                    },
+                    {
+                        subName: '广播支持',
+                        path: 'broadcast/index',
                     }
                 ]
             },
@@ -91,6 +95,10 @@ export default {
                     {
                         subName: '使用 function 初始化',
                         path: 'data/init',
+                    },
+                    {
+                        subName: '数组操作',
+                        path: 'data/array',
                     },
                     {
                         subName: '计算属性',
@@ -110,6 +118,7 @@ export default {
     },
 
     methods: {
+
         oneItemClick(e) {
             let viewPath = e.currentTarget.dataset.path;
             this.$api.navigateTo({

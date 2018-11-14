@@ -5,17 +5,22 @@
 
 'use strict';
 
-import {env, global} from '../na/index';
+import * as na from '../na/index';
 import request from '../na/request';
 
 export default {
 
     /**
-     * The native api
+     * The native env
      *
      * @type {Object}
      */
-    $api: env,
+    $na: na,
+
+    /**
+     * The native API
+     */
+    $api: Object.create(na.env),
 
     /**
      * The global object

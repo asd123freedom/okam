@@ -7,12 +7,16 @@
 
 const path = require('path');
 const fs = require('fs');
-const logger = require('../../lib/util').logger;
+const logger = require('okam/util').logger;
 
-const initBuildOption = require('../../lib/build/init-build-options');
-const syntax = require('../../lib/template/transform/syntax-plugin.js');
-const html = require('../../lib/template/transform/html-plugin.js');
-const ref = require('../../lib/template/transform/ref-plugin.js');
+const initBuildOption = require('okam/build/init-build-options');
+const swanSyntax = require('okam/processor/template/plugins/swan-syntax-plugin');
+const wxSyntax = require('okam/processor/template/plugins/wx-syntax-plugin');
+const html = require('okam/processor/template/plugins/html-plugin');
+const ref = require('okam/processor/template/plugins/ref-plugin');
+const swanEventPlugin = require('okam/processor/template/plugins/event/swan-event-plugin');
+const wxEventPlugin = require('okam/processor/template/plugins/event/wx-event-plugin');
+const antEventPlugin = require('okam/processor/template/plugins/event/ant-event-plugin');
 
 const defaultTags = {
     view: ['div', 'p', 'span'],
@@ -67,7 +71,8 @@ function fakeTemplateTagOptions(tagNames, appType) {
  */
 const getDefaultPlugins = function () {
     return [
-        syntax('swan'),
+        swanSyntax,
+        swanEventPlugin,
         html,
         ref
     ];
@@ -80,7 +85,8 @@ const getDefaultPlugins = function () {
  */
 const getDefaultWXPlugins = function () {
     return [
-        syntax('wx'),
+        wxSyntax,
+        wxEventPlugin,
         html,
         ref
     ];
@@ -94,7 +100,7 @@ const getDefaultWXPlugins = function () {
  * @param {string} appType 小程序类型
  * @return {Object} 返回配置
  */
-const fakeProcessorOptions = function (tagNames = defaultTags, myPlugins, appType = 'swan') {
+const fakeProcessorOptions = function (tagNames, myPlugins, appType = 'swan') {
     const initConfig = initBuildOption(appType, {}, {});
 
     let plugins = myPlugins ? myPlugins
@@ -108,7 +114,7 @@ const fakeProcessorOptions = function (tagNames = defaultTags, myPlugins, appTyp
         }),
         root: path.join(__dirname, '..'),
         config: {
-            template: fakeTemplateTagOptions(tagNames, appType),
+            template: fakeTemplateTagOptions(tagNames || defaultTags, appType),
             plugins
         },
         output: initConfig.output
@@ -116,6 +122,17 @@ const fakeProcessorOptions = function (tagNames = defaultTags, myPlugins, appTyp
 };
 
 exports.fakeProcessorOptions = fakeProcessorOptions;
+
+exports.getTemplateEventPlugin = function (appType) {
+    switch (appType) {
+        case 'swan':
+            return swanEventPlugin;
+        case 'wx':
+            return wxEventPlugin;
+        case 'ant':
+            return antEventPlugin;
+    }
+};
 
 exports.readFile = function (filePath) {
     return fs.readFileSync(path.join(__dirname, '../fixtures', filePath)).toString();

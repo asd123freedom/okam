@@ -36,7 +36,11 @@
 
     * [数据操作](component/setData.md)
 
+    * [Ref支持](component/ref.md)
+
     * [Mixins支持](component/mixins.md)
+
+    * [Broadcast支持](component/broadcast.md)
 
 * 进阶
 

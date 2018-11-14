@@ -6,22 +6,21 @@
 'use strict';
 
 /* eslint-disable babel/new-cap */
-
+/*
 import assert from 'assert';
 import expect, {createSpy, spyOn} from 'expect';
 import MyApp from 'core/App';
-import MyComponent from 'core/Component';
 import * as na from 'core/na/index';
 import base from 'core/base/base';
 import component from 'core/base/component';
 import {clearBaseCache} from 'core/helper/factory';
+import observable from 'core/extend/data/observable/swan';
+import {fakeComponent} from 'test/helper';
 import {
-    initSwanObservableArray,
-    resetObservableArray,
-    swanObservablePlugin as observable
+    resetObservableArray
 } from '../helper';
 
-describe('swan observable', function () {
+describe('swan array observable', function () {
     const rawEnv = na.env;
     const rawGetCurrApp = na.getCurrApp;
 
@@ -36,9 +35,13 @@ describe('swan observable', function () {
         m => rawComponentMethods.push(component[m])
     );
 
+    let MyComponent;
+
     beforeEach('init global App', function () {
         clearBaseCache();
         initSwanObservableArray();
+
+        MyComponent = fakeComponent();
 
         global.swan = {
             getSystemInfo() {},
@@ -70,20 +73,10 @@ describe('swan observable', function () {
             return {};
         };
         na.env = base.$api = global.swan;
-
-        global.Component = function (instance) {
-            Object.assign(instance, instance.methods);
-            return instance;
-        };
-
-        global.Page = function (instance) {
-            return instance;
-        };
     });
 
     afterEach('clear global App', function () {
-        global.Component = undefined;
-        global.Page = undefined;
+        MyComponent = undefined;
         global.swan = undefined;
         na.getCurrApp = rawGetCurrApp;
         na.env = base.$api = rawEnv;
@@ -467,3 +460,4 @@ describe('swan observable', function () {
         });
     });
 });
+*/

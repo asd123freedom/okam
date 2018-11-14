@@ -10,57 +10,32 @@
 import assert from 'assert';
 import expect, {createSpy, spyOn} from 'expect';
 import MyApp from 'core/App';
-import MyComponent from 'core/Component';
-import * as na from 'core/na/index';
-import base from 'core/base/base';
+import MyPage from 'core/Page';
 import {clearBaseCache} from 'core/helper/factory';
-import observable from 'core/extend/data/observable';
+import observable from 'core/extend/data/observable/wx';
 import watch from 'core/extend/data/watch';
+import {fakeComponent, fakeAppEnvAPIs} from 'test/helper';
 
 describe('data watch', function () {
-    const rawEnv = na.env;
-    const rawGetCurrApp = na.getCurrApp;
+    let MyComponent;
+    let restoreAppEnv;
+
     beforeEach('init global App', function () {
         clearBaseCache();
-        global.swan = {
-            getSystemInfo() {},
-            request() {},
-            createSelectorQuery() {
-                return {
-                    select(path) {
-                        return path;
-                    }
-                };
-            }
-        };
 
-        na.getCurrApp = function () {
-            return {};
-        };
-        na.env = base.$api = global.swan;
-
-        global.Component = function (instance) {
-            Object.assign(instance, instance.methods);
-            return instance;
-        };
-
-        global.Page = function (instance) {
-            return instance;
-        };
+        MyComponent = fakeComponent();
+        restoreAppEnv = fakeAppEnvAPIs('swan');
     });
 
     afterEach('clear global App', function () {
-        global.Component = undefined;
-        global.Page = undefined;
-        global.swan = undefined;
-        na.getCurrApp = rawGetCurrApp;
-        na.env = base.$api = rawEnv;
+        MyComponent = undefined;
+        restoreAppEnv();
         expect.restoreSpies();
     });
 
     it('should call afterObserverInit', function () {
         let spyWatchInit = spyOn(
-            watch.component.methods, 'afterObserverInit'
+            watch.component.methods, '__afterObserverInit'
         ).andCallThrough();
         MyApp.use(observable);
         MyApp.use(watch);
@@ -69,6 +44,65 @@ describe('data watch', function () {
         component.created();
         expect(spyWatchInit).toHaveBeenCalled();
         assert(spyWatchInit.calls.length === 1);
+    });
+
+    it('should normalize component watch props', function () {
+        MyApp.use(observable);
+        MyApp.use(watch);
+        let watchProps = {
+            c() {
+                // do sth.
+            }
+        };
+        let component = MyComponent({
+            watch: watchProps,
+            data: {
+                c: 23
+            }
+        });
+
+        assert(typeof component.methods.$rawWatch === 'function');
+        assert(component.watch === undefined);
+        expect(component.$rawWatch()).toEqual(watchProps);
+    });
+
+    it('should normalize page watch props', function (done) {
+        let spyWatchInit = spyOn(
+            watch.component.methods, '__afterObserverInit'
+        ).andCallThrough();
+
+        MyApp.use(observable);
+        MyApp.use(watch);
+
+        let spyWatchC = createSpy(() => {});
+        let page = MyPage({
+            data: {
+                c: 'ss'
+            },
+            watch: {
+                c: spyWatchC
+            }
+        });
+
+        assert(typeof page.$rawWatch === 'object');
+        assert(page.watch === undefined);
+        expect(page.$rawWatch).toEqual({c: spyWatchC});
+
+        page.onLoad();
+
+        let spySetData = createSpy(() => {});
+        page.setData = spySetData;
+
+        page.c = 23;
+        expect(spyWatchInit).toHaveBeenCalled();
+        assert(spyWatchInit.calls.length === 1);
+
+        setTimeout(() => {
+            expect(spyWatchC).toHaveBeenCalled();
+            assert(spyWatchC.calls.length === 1);
+            expect(spySetData.calls[0].arguments[0]).toEqual({c: 23});
+            done();
+        });
     });
 
     it('should support watch config', function (done) {
@@ -374,7 +408,7 @@ describe('data watch', function () {
         setTimeout(() => {
             assert(spySetData.calls.length === 1);
             component.num = 12;
-            component.props.num.observer.call(component, 12, 2, 'num');
+            component.properties.num.observer.call(component, 12, 2, 'num');
 
             setTimeout(() => {
                 expect(spyWatchProp).toHaveBeenCalledWith(12, undefined);
